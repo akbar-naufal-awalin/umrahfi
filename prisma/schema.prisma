@@ -1,0 +1,478 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Users and Authentication
+model User {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  email          String   @unique
+  passwordHash    String?
+  firstName      String
+  lastName       String
+  fullName       String?
+  phone          String?
+  avatar         String?
+  role           Role     @default(USER)
+  status         Status   @default(ACTIVE)
+  verified       Boolean  @default(false)
+  verifyToken    String?  @unique
+  passwordResetToken String? @unique
+  passwordResetExpires DateTime?
+  
+  // Relations
+  company        Company?
+  orders         Order[]
+  travelers      Traveler[]
+  reviews        Review[]
+  wishlist       WishlistItem[]
+  notifications  Notification[]
+  sessions       Session[]
+  addresses      Address[]
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  COMPANY_ADMIN
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  userId      String
+  token       String   @unique
+  expires     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String?  // e.g., "Home", "Work"
+  address     String
+  city        String
+  state       String?
+  postalCode  String?
+  country     String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+// Companies
+model Company {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  userId         String   @unique  // Owner/admin user
+  name           String
+  slug           String   @unique
+  logo           String?
+  coverImage     String?
+  description    String?  @db.Text
+  shortDescription String?
+  website        String?
+  email          String
+  phone          String
+  address        String?
+  city           String?
+  country        String
+  rating         Float?   @default(0)
+  reviewCount    Int      @default(0)
+  verified       Boolean  @default(false)
+  featured       Boolean  @default(false)
+  status         CompanyStatus @default(PENDING)
+  
+  // Relations
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packages       Package[]
+  reviews        Review[]
+  tags           CompanyTag[]
+  documents      CompanyDocument[]
+
+  @@map("companies")
+}
+
+enum CompanyStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+model CompanyTag {
+  id             String   @id @default(cuid())
+  companyId      String
+  name           String
+  
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_tags")
+}
+
+model CompanyDocument {
+  id             String   @id @default(cuid())
+  companyId      String
+  type           String   // e.g., "license", "certificate"
+  title          String
+  fileUrl        String
+  verified       Boolean  @default(false)
+  uploadedAt     DateTime @default(now())
+  
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_documents")
+}
+
+// Packages & Offerings
+model Package {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  companyId       String
+  title           String
+  slug            String   @unique
+  description     String?  @db.Text
+  shortDescription String?
+  type            PackageType
+  durationDays    Int
+  rating          Float?   @default(0)
+  reviewCount     Int      @default(0)
+  featured        Boolean  @default(false)
+  bestSeller      Boolean  @default(false)
+  status          PackageStatus @default(DRAFT)
+  startDate       DateTime?
+  endDate         DateTime?
+  availableSeats  Int?
+  bookedSeats     Int      @default(0)
+  
+  // Pricing
+  basePrice       Decimal  @db.Decimal(10, 2)
+  discountPrice   Decimal? @db.Decimal(10, 2)
+  childPrice      Decimal? @db.Decimal(10, 2)
+  infantPrice     Decimal? @db.Decimal(10, 2)
+  
+  // Relations
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  images          PackageImage[]
+  inclusions      PackageInclusion[]
+  itinerary       ItineraryItem[]
+  accommodations  Accommodation[]
+  reviews         Review[]
+  orders          Order[]
+  wishlistItems   WishlistItem[]
+  destinations    PackageDestination[]
+
+  @@map("packages")
+}
+
+enum PackageType {
+  MAKKAH_ONLY
+  MADINAH_ONLY
+  COMBINED
+  SPECIAL
+  RAMADAN
+  HAJJ
+}
+
+enum PackageStatus {
+  DRAFT
+  PUBLISHED
+  INACTIVE
+  SOLD_OUT
+}
+
+model PackageImage {
+  id              String   @id @default(cuid())
+  packageId       String
+  url             String
+  alt             String?
+  isPrimary       Boolean  @default(false)
+  order           Int      @default(0)
+  
+  package         Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@map("package_images")
+}
+
+model PackageInclusion {
+  id              String   @id @default(cuid())
+  packageId       String
+  name            String
+  icon            String?
+  included        Boolean  @default(true)
+  
+  package         Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@map("package_inclusions")
+}
+
+model ItineraryItem {
+  id              String   @id @default(cuid())
+  packageId       String
+  day             Int
+  title           String
+  description     String?  @db.Text
+  
+  package         Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@map("itinerary_items")
+}
+
+model Accommodation {
+  id              String   @id @default(cuid())
+  packageId       String
+  name            String
+  location        String
+  stars           Int?
+  description     String?
+  nights          Int
+  roomType        String?
+  distanceToHaram String?
+  
+  package         Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@map("accommodations")
+}
+
+model PackageDestination {
+  id              String   @id @default(cuid())
+  packageId       String
+  cityId          String
+  nights          Int
+  
+  package         Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  city            City     @relation(fields: [cityId], references: [id])
+
+  @@map("package_destinations")
+}
+
+model City {
+  id              String   @id @default(cuid())
+  name            String
+  countryId       String
+  
+  country         Country  @relation(fields: [countryId], references: [id])
+  packageDestinations PackageDestination[]
+
+  @@map("cities")
+}
+
+model Country {
+  id              String   @id @default(cuid())
+  name            String
+  code            String   @unique
+  flagUrl         String?
+  
+  cities          City[]
+
+  @@map("countries")
+}
+
+// Orders and Booking
+model Order {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  userId          String
+  packageId       String
+  orderNumber     String   @unique
+  status          OrderStatus @default(PENDING)
+  totalAmount     Decimal  @db.Decimal(10, 2)
+  adultCount      Int      @default(1)
+  childCount      Int      @default(0)
+  infantCount     Int      @default(0)
+  departureDate   DateTime
+  specialRequests String?  @db.Text
+  
+  // Relations
+  user            User     @relation(fields: [userId], references: [id])
+  package         Package  @relation(fields: [packageId], references: [id])
+  travelers       Traveler[]
+  payments        Payment[]
+  notes           OrderNote[]
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+model Traveler {
+  id              String   @id @default(cuid())
+  userId          String?  // Can be null for non-registered travelers
+  orderId         String
+  firstName       String
+  lastName        String
+  type            TravelerType
+  dateOfBirth     DateTime?
+  gender          Gender?
+  nationality     String?
+  passportNumber  String?
+  passportExpiry  DateTime?
+  passportScan    String?
+  
+  user            User?    @relation(fields: [userId], references: [id])
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("travelers")
+}
+
+enum TravelerType {
+  ADULT
+  CHILD
+  INFANT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model OrderNote {
+  id              String   @id @default(cuid())
+  orderId         String
+  createdAt       DateTime @default(now())
+  note            String   @db.Text
+  addedBy         String   // User ID or system
+  isInternal      Boolean  @default(true)
+  
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_notes")
+}
+
+// Payments
+model Payment {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  orderId         String
+  amount          Decimal  @db.Decimal(10, 2)
+  currency        String   @default("SAR")
+  status          PaymentStatus @default(PENDING)
+  method          PaymentMethod
+  transactionId   String?  @unique
+  paymentIntentId String?  @unique
+  receiptUrl      String?
+  notes           String?
+  
+  order           Order    @relation(fields: [orderId], references: [id])
+
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  PAYPAL
+  APPLE_PAY
+  GOOGLE_PAY
+  MADA
+  OTHER
+}
+
+// Reviews and Ratings
+model Review {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  userId          String
+  packageId       String
+  companyId       String
+  rating          Int
+  title           String?
+  text            String?  @db.Text
+  status          ReviewStatus @default(PENDING)
+  
+  user            User     @relation(fields: [userId], references: [id])
+  package         Package  @relation(fields: [packageId], references: [id])
+  company         Company  @relation(fields: [companyId], references: [id])
+
+  @@map("reviews")
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+// Wishlists
+model WishlistItem {
+  id              String   @id @default(cuid())
+  userId          String
+  packageId       String
+  addedAt         DateTime @default(now())
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  package         Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@map("wishlist_items")
+  @@unique([userId, packageId])
+}
+
+// Notifications
+model Notification {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  userId          String
+  title           String
+  message         String
+  type            String   // e.g., "offer", "order", "system"
+  read            Boolean  @default(false)
+  link            String?
+  icon            String?
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// Settings and Configuration
+model Setting {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           String   @db.Text
+  type            String   // e.g., "system", "payment", "notification"
+  updatedAt       DateTime @updatedAt
+
+  @@map("settings")
+}
